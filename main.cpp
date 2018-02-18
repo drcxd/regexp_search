@@ -80,7 +80,13 @@ static void LevelOneParse(string &regexp, map<string, State *>symbol_map) {
         case '+':
         case '?':
         case '|': {
+            if (!sh) {
+                cout << "[DEBUG] no sh pass\n";
+                break;
+            }
             end = i;
+            cout << "[DEBUG] end: " << end
+                 << " start: " << start << endl;
             cache.clear();
             for (auto j : *sh) {
                 State *pState = new State(SINGLE);
@@ -93,11 +99,12 @@ static void LevelOneParse(string &regexp, map<string, State *>symbol_map) {
                 }
             }
             stringstream ss;
-            ss << "@" << label_count << "@";
+            ss << "@" << label_count << "@\n";
             regexp.replace(start, end, ss.str());
             ss.str("");
             delete sh;
             sh = nullptr;
+            ++label_count;
             break;
         }
         default:
@@ -124,8 +131,8 @@ static void LevelThreeParse(string &regexp, map<string, State *>symbol_map) {
 static void parseRegExp(string &regexp) {
     map<string, State *> symbol_map;
     LevelOneParse(regexp, symbol_map);
-    // LevelTwoParse(regexp, symbol_map);
-    // LevelThreeParse(regexp, symbol_map);
+    LevelTwoParse(regexp, symbol_map);
+    LevelThreeParse(regexp, symbol_map);
 }
 
 int main() {

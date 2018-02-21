@@ -1,0 +1,9 @@
+This is a small program tring to parse and match very simple regular
+expression using NFA introducing in [1]. The implementation refer to
+[2].
+
+[1] Thompson K. Programming Techniques: Regular expression search
+algorithm[J]. Comm Acm, 1968, 11(6):419-422.
+
+[2] Russ Cox. Regular expression matching can be simple and
+fast. https://swtch.com/~rsc/regexp/regexp1.html

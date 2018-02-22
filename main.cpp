@@ -1,7 +1,11 @@
+#include "State.h"
+
 #include <string>
 #include <iostream>
 #include <vector>
+#include <deque>
 #include <map>
+#include <set>
 #include <sstream>
 
 #define DEBUG (cout << "[DEBUG] ")
@@ -13,6 +17,8 @@ using std::cout;
 using std::endl;
 using std::map;
 using std::stringstream;
+using std::set;
+using std::deque;
 
 // Simple regular expression: only consists of
 
@@ -39,64 +45,39 @@ using std::stringstream;
 // Finally we let the test string go through the NFA to see if there
 // is a match
 
+// global label counter
 int label_count = 0;
 
-struct State {
-    State(State *out1, State *out2)
-        : m_out1(out1)
-        , m_out2(out2) { }
+// Utilitiy functions
+static void printStateChain(State *s);
+static void buildPlainChain(vector<State *> &cache, string &result,
+    map<string, State *>&sumbol_map, string *sh, int &label_count);
+static void buildQuantityChain(vector<string> &cat_labels,
+    map<string, State*> &symbol_map, string &result,
+    set<string> labels);
+static string getFirstLabel(const string &result);
 
-    State()
-        : m_out1(nullptr)
-        , m_out2(nullptr) { }
-    State *m_out1;
-    State *m_out2;
-    char m_need = 0;
+// Main work functions
+State *LevelOneParse(string &regexp, map<string, State *>&symbol_map);
+State *LevelTwoParse(string &regexp, map<string, State *>&symbol_map);
+void LevelThreeParse(string &regexp, map<string, State *>&symbol_map);
+State *parseRegExp(string &regexp);
+bool walk(string &search, State *start);
 
-    void print() {
-        cout << "State: " << this << endl;
-        cout << "need: " << m_need << endl;
-        cout << "out1: " << m_out1 << endl;
-        cout << "out2: " << m_out2 << endl;
-        cout << endl;
-    }
+int main() {
+    string regexp;
+    cout << "input your regular expression: ";
+    cin >> regexp;
+    State *start = parseRegExp(regexp);
+    // Walk Part
+    cout << "input your search string: ";
+    string search;
+    cin >> search;
+    cout << (walk(search, start) ? "match" : "no match") << endl;
+    return 0;
+}
 
-    virtual bool check(string::iterator beg, string::iterator end) {
-        bool res1 = true, res2= true;
-        if (beg == end) {
-            return false;
-        }
-        if (*beg != m_need) {
-            return false;
-        }
-        if (!m_out1 && !m_out2) {
-            return true;
-        }
-        res1 = m_out1->check(beg + 1, end);
-        if (m_out2) {
-            res2 = m_out2->check(beg + 1, end);
-        }
-        if (m_out2) {
-            return res1 || res2;
-        } else {
-            return res1;
-        }
-    }
-};
-
-struct QuestionState : public State {
-    bool check(string::iterator beg, string::iterator end) override {
-        bool res1 = true, res2 = true;
-        if (beg == end) {
-            return false;
-        }
-        res1 = m_out1->check(beg, end);
-        res2 = m_out2->check(beg, end);
-        return res1 || res2;
-    }
-};
-
-static void printStateChain(State *s) {
+void printStateChain(State *s) {
     if (!s) {
         return;
     }
@@ -107,7 +88,7 @@ static void printStateChain(State *s) {
         printStateChain(s->m_out2);
 }
 
-static void buildPlainChain(vector<State *> &cache, string &result,
+void buildPlainChain(vector<State *> &cache, string &result,
     map<string, State *>&symbol_map, string *sh, int &label_count) {
     cache.clear();
     for (auto j : *sh) {
@@ -121,7 +102,7 @@ static void buildPlainChain(vector<State *> &cache, string &result,
         }
     }
     stringstream ss;
-    ss << "@" << label_count << "@";
+    ss << "@" << "1_" << label_count << "@";
     result.append(ss.str());
     symbol_map.insert(std::make_pair(ss.str(), cache.front()));
     ss.str("");
@@ -170,69 +151,104 @@ State *LevelOneParse(string &regexp, map<string, State *>&symbol_map) {
     return symbol_map.begin()->second;
 }
 
-void LevelTwoParse(string &regexp, map<string, State *>&symbol_map) {
+State *LevelTwoParse(string &regexp, map<string, State *>&symbol_map) {
     // replace *, ?, + and concate the corresponding state with the
     // NFA generated in level one parse
-    string label;
-    string prev_label;
+    DEBUG << "level two regexp: " << regexp << endl;
     bool in_label = false;
-    // vector<State *> qs_cache;
+    set<string> labels;
+    vector<State *> cache;
+    string label;
+    string result;
     for (std::size_t i = 0; i < regexp.size(); ++i) {
+        result.push_back(regexp[i]);
         if (regexp[i] == '@' && !in_label) {
             in_label = true;
-            prev_label = label;
             label.clear();
-        } else if (regexp[i] == '@' && in_label) {
+        }
+        if (regexp[i] == '@' && in_label && !label.empty()) {
             label.push_back(regexp[i]);
             in_label = false;
-            DEBUG << "label: " << label << endl;
-            // QuestionState *qs = new QuestionState();
-            // qs.m_out1 = symbol_map.at(label);
-            // qs.m_out2 = prev_label.empty() ? new State() :
-            //     symbol_map.at(prev_label);
+            labels.insert(label);
         }
         if (in_label) {
             label.push_back(regexp[i]);
         }
         switch (regexp[i]) {
-        case '?': {
-            QuestionState *qs = new QuestionState();
-            State *s1 = prev_label.empty() ? symbol_map.at(label) :
-                symbol_map.at(prev_label);
-            State *s2 = prev_label.empty() ? new State() :
-                symbol_map.at(label);
-            qs->m_out1 = s1;
-            qs->m_out2 = s2;
-            if (!prev_label.empty()) {
-                while (s1->m_out1) {
-                    s1 = s1->m_out1;
-                }
-                s1->m_out1 = s2;
-            }
-            // qs_cache.push_back(qs);
-            printStateChain(qs);
+        default: {
+            // DEBUG << "scan plain character: " << regexp[i] << endl;
             break;
         }
-        default: {
-            DEBUG << "Error!\n";
+        case '?': {
+            result.pop_back();
+            QuestionState *qs = new QuestionState();
+            qs->m_out1 = symbol_map.at(label);
+            stringstream ss;
+            ss << "@2_" << label_count << "@";
+            ++label_count;
+            string new_label = ss.str();
+            symbol_map.erase(label);
+            symbol_map.insert(std::make_pair(new_label, qs));
+            labels.erase(label);
+            labels.insert(new_label);
+            size_t old_label_pos = result.find(label);
+            if (old_label_pos == std::string::npos) {
+                DEBUG << "Fatal Error: Can't find label: " << label
+                      << "in result: " << result << endl;
+                DEBUG << "Program Terminated!\n";
+                exit(0);
+            }
+            result.replace(old_label_pos, label.length(), new_label);
+            break;
+        }
+        case '|': {
             break;
         }
         }
     }
-    // if (cache.size() > 1) {
-    //     for (std::size_t i = 0; i < cache.size() - 1; ++i) {
-    //         State *s1 = nullptr, *s2 = nullptr;
-    //         s1 = qs->m_out1;
-    //         while (s1->m_out1) {
-    //             s1 = s1->m_out1;
-    //         }
-    //         s1->m_out1 = cache[i + 1];
-    //         s2 = qs->m_out2;
-    //     }    
-    // }    
+    DEBUG << "After level 2 parse the result is " << result << endl;
+    // parse it again and concatenate any adjacent labels
+    regexp = result;
+    result.clear();
+    in_label = false;
+    vector<string> cat_labels;
+    for (std::size_t i = 0; i < regexp.size(); ++i) {
+        result.push_back(regexp[i]);
+        if (regexp[i] == '@' && !in_label) {
+            in_label = true;
+            label.clear();
+        }
+        if (regexp[i] == '@' && in_label && !label.empty()) {
+            label.push_back(regexp[i]);
+            in_label = false;
+            labels.insert(label);
+            cat_labels.push_back(label);
+        }
+        if (in_label) {
+            label.push_back(regexp[i]);
+        }
+        switch (regexp[i]) {
+        default: {
+            break;
+        }
+        case '|': {
+            if (cat_labels.size() < 2) {
+                break;
+            }
+            buildQuantityChain(cat_labels, symbol_map, result, labels);
+            break;
+        }
+        }
+    }
+    if (cat_labels.size() > 1) {
+        buildQuantityChain(cat_labels, symbol_map, result, labels);
+    }
+    DEBUG << "After level 2 reparse result is " << result << endl;
+    State *start = symbol_map.at(getFirstLabel(result));
+    return start;
 }
 
-void LevelThreeParse(string &regexp, map<string, State *>symbol_map) {
+void LevelThreeParse(string &regexp, map<string, State *>&symbol_map) {
     // replace | and reorgnize the NFA generated in the first two
     // level parse
 }
@@ -241,7 +257,7 @@ State *parseRegExp(string &regexp) {
     State *start = nullptr;
     map<string, State *> symbol_map;
     start = LevelOneParse(regexp, symbol_map);
-    LevelTwoParse(regexp, symbol_map);
+    start = LevelTwoParse(regexp, symbol_map);
     // LevelThreeParse(regexp, symbol_map);
     return start;
 }
@@ -256,15 +272,73 @@ bool walk(string &search, State *start) {
     return false;
 }
 
-int main() {
-    string regexp;
-    cout << "input your regular expression: ";
-    cin >> regexp;
-    State *start = parseRegExp(regexp);
-    // Walk Part
-    // cout << "input your search string: ";
-    // string search;
-    // cin >> search;
-    // cout << (walk(search, start) ? "match" : "no match") << endl;
-    return 0;
+void buildQuantityChain(vector<string> &cat_labels, map<string, State*> &symbol_map,
+    string &result, set<string> labels) {
+    State *head = nullptr;
+    for (std::size_t i = 0; i < cat_labels.size() - 1; ++i) {
+        State *s1 = symbol_map.at(cat_labels[i]);
+        State *s2 = symbol_map.at(cat_labels[i + 1]);
+        if (i == 0) {
+            head = s1;
+        }
+        if (QuestionState *qs = dynamic_cast<QuestionState *>(s1)) {
+            qs->m_out2 = s2;
+            while (s1->m_out1) {
+                s1 = s1->m_out1;
+            }
+            s1->m_out1 = s2;
+        } else {
+            s1->m_out1 = s2;
+        }
+    }
+    stringstream ss;
+    ss << "@2_" << label_count << "@";
+    ++label_count;
+    string new_label = ss.str();
+    string old_label = cat_labels.front();
+    std::size_t old_pos = result.find(old_label);
+    if (old_pos == std::string::npos) {
+        DEBUG << "Fatal Error: Can't find label: " << old_label
+              << "in result: " << result << endl;
+        DEBUG << "Program Terminated!\n";
+        exit(0);
+    }
+    result.replace(old_pos, old_label.length(), new_label);
+    symbol_map.erase(old_label);
+    symbol_map.insert(std::make_pair(new_label, head));
+    labels.erase(old_label);
+    labels.insert(new_label);
+    for (std::size_t i = 1; i < cat_labels.size(); ++i) {
+        old_label = cat_labels[i];
+        old_pos = result.find(old_label);
+        if (old_pos == std::string::npos) {
+            DEBUG << "Fatal Error: Can't find label: " << old_label
+                  << "in result: " << result << endl;
+            DEBUG << "Program Terminated!\n";
+            exit(0);
+        }
+        result.replace(old_pos, old_label.length(), "");
+        symbol_map.erase(old_label);
+        labels.erase(old_label);
+    }
+    cat_labels.clear();
+}
+
+string getFirstLabel(const string &result) {
+    string label;
+    bool in_label = false;
+    for (std::size_t i = 0; i < result.size(); ++i) {
+        if (result[i] == '@' && !in_label) {
+            in_label = true;
+        }
+        if (result[i] == '@' && in_label && !label.empty()) {
+            label.push_back(result[i]);
+            in_label = false;
+            break;
+        }
+        if (in_label) {
+            label.push_back(result[i]);
+        }
+    }
+    return label;
 }

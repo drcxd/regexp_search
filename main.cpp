@@ -73,6 +73,7 @@ int main() {
     cout << "input your search string: ";
     string search;
     cin >> search;
+    cout << "Your search string is: " << search << endl;
     cout << (walk(search, start) ? "match" : "no match") << endl;
     return 0;
 }
@@ -201,6 +202,58 @@ State *LevelTwoParse(string &regexp, map<string, State *>&symbol_map) {
             result.replace(old_label_pos, label.length(), new_label);
             break;
         }
+        case '+': {
+            result.pop_back();
+            PlusState *ps = new PlusState();
+            State *s1 = symbol_map.at(label);
+            State *s2 = s1;
+            ps->m_out1 = s1;
+            while (s2->m_out1) {
+                s2 = s2->m_out1;
+            }
+            s2->m_out1 = ps;
+            stringstream ss;
+            ss << "@2_" << label_count << "@";
+            ++label_count;
+            string new_label = ss.str();
+            symbol_map.erase(label);
+            symbol_map.insert(std::make_pair(new_label, s1));
+            size_t old_label_pos = result.find(label);
+            if (old_label_pos == std::string::npos) {
+                DEBUG << "Fatal Error: Can't find label: " << label
+                      << "in result: " << result << endl;
+                DEBUG << "Program Terminated!\n";
+                exit(0);
+            }
+            result.replace(old_label_pos, label.length(), new_label);
+            break;
+        }
+        case '*': {
+            result.pop_back();
+            AsteriskState *as = new AsteriskState();
+            State *s1 = symbol_map.at(label);
+            State *s2 = s1;
+            as->m_out1 = s1;
+            while (s2->m_out1) {
+                s2 = s2->m_out1;
+            }
+            s2->m_out1 = as;
+            stringstream ss;
+            ss << "@2_" << label_count << "@";
+            ++label_count;
+            string new_label = ss.str();
+            symbol_map.erase(label);
+            symbol_map.insert(std::make_pair(new_label, as));
+            size_t old_label_pos = result.find(label);
+            if (old_label_pos == std::string::npos) {
+                DEBUG << "Fatal Error: Can't find label: " << label
+                      << "in result: " << result << endl;
+                DEBUG << "Program Terminated!\n";
+                exit(0);
+            }
+            result.replace(old_label_pos, label.length(), new_label);
+            break;
+        }
         case '|': {
             break;
         }
@@ -262,6 +315,9 @@ State *parseRegExp(string &regexp) {
     return start;
 }
 
+/* When the string is empty and the regular expression is like ab*
+ * this match fucntion will return false. This is not true. But I
+ * don't fix it now. */
 bool walk(string &search, State *start) {
     for (auto it = search.begin(), end = search.end();
          it != end; ++it) {
@@ -287,8 +343,19 @@ void buildQuantityChain(vector<string> &cat_labels, map<string, State*> &symbol_
                 s1 = s1->m_out1;
             }
             s1->m_out1 = s2;
+        } else if (AsteriskState *as = dynamic_cast<AsteriskState *>(s1)) {
+            as->m_out2 = s2;
         } else {
-            s1->m_out1 = s2;
+            State *s3 = s1;
+            while (s3->m_out1 && s3->m_out1 != s1) {
+                s3 = s3->m_out1;
+            }
+            if (s3->m_out1 == s1) {
+                // s3 is plus state
+                s3->m_out2 = s2;
+            } else {
+                s3->m_out1 = s2;
+            }
         }
     }
     stringstream ss;

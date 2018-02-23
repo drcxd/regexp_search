@@ -87,3 +87,12 @@ struct PlusState : public State {
         return res1 || res2;
     }
 };
+
+struct AlternationState : public State {
+    bool check(std::string::iterator beg, std::string::iterator end) override {
+        bool res1 = true, res2 = true;
+        res1 = m_out1->check(beg, end);
+        res2 = m_out2->check(beg, end);
+        return res1 || res2;
+    }
+};

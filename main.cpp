@@ -60,7 +60,7 @@ static string getFirstLabel(const string &result);
 // Main work functions
 State *LevelOneParse(string &regexp, map<string, State *>&symbol_map);
 State *LevelTwoParse(string &regexp, map<string, State *>&symbol_map);
-void LevelThreeParse(string &regexp, map<string, State *>&symbol_map);
+State *LevelThreeParse(string &regexp, map<string, State *>&symbol_map);
 State *parseRegExp(string &regexp);
 bool walk(string &search, State *start);
 
@@ -286,6 +286,7 @@ State *LevelTwoParse(string &regexp, map<string, State *>&symbol_map) {
         }
         case '|': {
             if (cat_labels.size() < 2) {
+                cat_labels.clear();
                 break;
             }
             buildQuantityChain(cat_labels, symbol_map, result, labels);
@@ -298,12 +299,39 @@ State *LevelTwoParse(string &regexp, map<string, State *>&symbol_map) {
     }
     DEBUG << "After level 2 reparse result is " << result << endl;
     State *start = symbol_map.at(getFirstLabel(result));
+    regexp = result;
     return start;
 }
 
-void LevelThreeParse(string &regexp, map<string, State *>&symbol_map) {
+State *LevelThreeParse(string &regexp, map<string, State *>&symbol_map) {
     // replace | and reorgnize the NFA generated in the first two
     // level parse
+    vector<State *> alternation_states;
+    DEBUG << "Before level 3 parse, the regexp is " << regexp << endl;
+    if (symbol_map.size() == 1) {
+        return symbol_map.begin()->second;
+    } else {
+        AlternationState *first_als = new AlternationState();
+        auto it = symbol_map.begin();
+        first_als->m_out1 = it->second;
+        ++it;
+        first_als->m_out2 = it->second;
+        alternation_states.push_back(first_als);
+        ++it;
+        while (it != symbol_map.end()) {
+            AlternationState *other_als = new AlternationState();
+            other_als->m_out2 = it->second;
+            alternation_states.push_back(other_als);
+            ++it;
+        }
+        for (std::size_t i = alternation_states.size() - 1; i != 0; --i) {
+            State *s1 = alternation_states[i];
+            State *s2 = alternation_states[i - 1];
+            s1->m_out1 = s2;
+        }
+        // printStateChain(alternation_states.back());
+        return alternation_states.back();
+    }
 }
 
 State *parseRegExp(string &regexp) {
@@ -311,7 +339,7 @@ State *parseRegExp(string &regexp) {
     map<string, State *> symbol_map;
     start = LevelOneParse(regexp, symbol_map);
     start = LevelTwoParse(regexp, symbol_map);
-    // LevelThreeParse(regexp, symbol_map);
+    start = LevelThreeParse(regexp, symbol_map);
     return start;
 }
 

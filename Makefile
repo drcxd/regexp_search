@@ -1,4 +1,4 @@
-CC = clang++
+CC = g++
 CFLAGS = -g -std=c++11
 
 main : main.cpp

@@ -3,7 +3,7 @@
 This is a small regular expression program which could parse
 and match simple regular expression.
 
-The idea of NFA is learned from [1]. The implementation mainly
+The idea of NFA is learned from \[1\]. The implementation mainly
 refer to Russ Cox's [Regular expression matching can be simple and fast][1].
 
 [1]: <https://swtch.com/~rsc/regexp/regexp1.html>
@@ -25,5 +25,5 @@ alternation character `|`.
 
 # Reference
 
-[1] Thompson K. Programming Techniques: Regular expression search
-algorithm[J]. Comm Acm, 1968, 11(6):419-422.
+\[1\] Thompson K. Programming Techniques: Regular expression search
+algorithm\[J\]. Comm Acm, 1968, 11(6):419-422.
